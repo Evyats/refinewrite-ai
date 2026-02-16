@@ -70,3 +70,4 @@ Vercel notes:
   - `POST /api/refine`
   - `GET /api/openai-status`
   - `GET /api/network-info`
+- Serverless deployment mounts these handlers at function root so the external URLs remain `/api/*`.

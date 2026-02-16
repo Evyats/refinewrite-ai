@@ -64,3 +64,9 @@ Set these env vars in the deployment project:
 - `OPENAI_MODEL` (optional)
 - `GOOGLE_CLIENT_ID`
 - `ALLOWED_EMAIL`
+
+Vercel notes:
+- API routes are served by `api/[...all].js` and include:
+  - `POST /api/refine`
+  - `GET /api/openai-status`
+  - `GET /api/network-info`

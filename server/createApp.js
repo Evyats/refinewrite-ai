@@ -6,7 +6,8 @@ const { createRefineRouter } = require('./routes/refine');
 const { createNetworkInfoRouter } = require('./routes/networkInfo');
 const { createOpenAiStatusRouter } = require('./routes/openAiStatus');
 
-const createApp = () => {
+const createApp = (options = {}) => {
+  const { apiOnly = false } = options;
   const app = express();
 
   app.use(express.json({ limit: '1mb' }));
@@ -35,10 +36,12 @@ const createApp = () => {
     });
   });
 
-  app.use(express.static(path.join(__dirname, '..')));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(__dirname, '..', 'index.html'));
-  });
+  if (!apiOnly) {
+    app.use(express.static(path.join(__dirname, '..')));
+    app.get('*', (req, res) => {
+      res.sendFile(path.join(__dirname, '..', 'index.html'));
+    });
+  }
 
   return app;
 };

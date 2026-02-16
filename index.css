@@ -28,7 +28,7 @@ body {
 }
 
 .editor-content.is-loading {
-  filter: blur(2.4px);
+  filter: blur(1.8px);
   opacity: 0.78;
 }
 

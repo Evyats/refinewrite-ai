@@ -8,6 +8,6 @@ export const UI_MOTION = {
 export const EDITOR_MOTION = {
   revealStaggerMs: 100,
   revealDurationMs: 240,
-  unmarkDurationMs: 220,
+  unmarkDurationMs: 440,
   burstDotCount: 6,
 } as const;

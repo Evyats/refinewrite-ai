@@ -7,9 +7,11 @@ interface ToolbarProps {
   onCopy: () => void;
   isLoading: boolean;
   onClear: () => void;
+  onLoadDefaultText: () => void;
+  isDarkMode: boolean;
 }
 
-const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear }) => {
+const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear, onLoadDefaultText, isDarkMode }) => {
   const [customInput, setCustomInput] = useState('');
 
   const buttons = [
@@ -27,7 +29,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear 
   };
 
   return (
-    <div className="flex flex-col gap-3 p-4 bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm">
+    <div className={`flex flex-col gap-3 p-4 border-b sticky top-0 z-10 shadow-sm transition-colors duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-2 flex-grow">
           {buttons.map((btn) => (
@@ -39,7 +41,9 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear 
                 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
                 ${isLoading 
                   ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:scale-95 border border-indigo-100 shadow-sm'}
+                  : isDarkMode
+                    ? 'bg-indigo-950/60 text-indigo-200 hover:bg-indigo-900 active:scale-95 border border-indigo-800/70 shadow-sm'
+                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:scale-95 border border-indigo-100 shadow-sm'}
               `}
               title={btn.description}
             >
@@ -51,9 +55,19 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear 
         
         <div className="flex gap-2">
           <button
+            onClick={onLoadDefaultText}
+            disabled={isLoading}
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'text-slate-400 hover:text-indigo-200 hover:bg-indigo-900/30' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            title="Load default sample text"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582M20 20v-5h-.581M5.8 9A7 7 0 0119 11M18.2 15A7 7 0 015 13" />
+            </svg>
+          </button>
+          <button
             onClick={onClear}
             disabled={isLoading}
-            className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'text-slate-400 hover:text-red-300 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
             title="Clear editor"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -62,7 +76,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear 
           </button>
           <button
             onClick={onCopy}
-            className="flex items-center gap-2 px-4 py-1.5 bg-gray-900 text-white rounded-lg text-xs font-bold hover:bg-black transition-all active:scale-95 shadow-md"
+            className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all active:scale-95 shadow-md ${isDarkMode ? 'bg-slate-700 text-slate-100 hover:bg-slate-600' : 'bg-gray-900 text-white hover:bg-black'}`}
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
@@ -82,7 +96,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear 
             onChange={(e) => setCustomInput(e.target.value)}
             placeholder="Custom instruction (e.g. 'Make it more formal', 'Translate to German'...)"
             disabled={isLoading}
-            className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all"
+            className={`w-full border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400' : 'bg-gray-50 border-gray-200 text-gray-900'}`}
           />
           <button 
             type="submit"

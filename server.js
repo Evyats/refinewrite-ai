@@ -6,8 +6,20 @@ require('dotenv').config({ path: path.join(__dirname, '.env.local') });
 const app = express();
 const port = process.env.PORT || 8080;
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+const LLM_REFINEMENT_ENABLED = process.env.LLM_REFINEMENT_ENABLED !== 'false';
+const MAX_INPUT_CHARS = Number(process.env.MAX_INPUT_CHARS || 20000);
+const MAX_REQUESTS_PER_MINUTE_PER_IP = Number(process.env.MAX_REQUESTS_PER_MINUTE_PER_IP || 20);
+const MAX_REQUESTS_PER_DAY_PER_IP = Number(process.env.MAX_REQUESTS_PER_DAY_PER_IP || 300);
+const MIN_INTERVAL_BETWEEN_REQUESTS_MS = Number(process.env.MIN_INTERVAL_BETWEEN_REQUESTS_MS || 500);
+const MAX_CONCURRENT_REFINES_PER_IP = Number(process.env.MAX_CONCURRENT_REFINES_PER_IP || 2);
+const MAX_CONCURRENT_REFINES_GLOBAL = Number(process.env.MAX_CONCURRENT_REFINES_GLOBAL || 40);
 
 const ALLOWED_TYPES = new Set(['slight', 'prettier', 'revision', 'filler', 'custom']);
+const perIpRequestWindow = new Map();
+const perIpDailyUsage = new Map();
+const perIpActiveRefines = new Map();
+const perIpLastRequestAt = new Map();
+let activeRefinesGlobal = 0;
 
 app.use(express.json({ limit: '1mb' }));
 
@@ -87,13 +99,6 @@ function sseEvent(res, event, data) {
   res.write(`data: ${JSON.stringify(data)}\n\n`);
 }
 
-function previewText(value, max = 220) {
-  if (typeof value !== 'string') return '';
-  const oneLine = value.replace(/\s+/g, ' ').trim();
-  if (oneLine.length <= max) return oneLine;
-  return `${oneLine.slice(0, max)}...`;
-}
-
 function getLocalIPv4Addresses() {
   const interfaces = os.networkInterfaces();
   const ips = new Set();
@@ -128,25 +133,120 @@ function extractTextFromResponsePayload(payload) {
   return combined;
 }
 
+function normalizeIp(ip) {
+  if (!ip) return 'unknown';
+  return ip.replace(/^::ffff:/, '');
+}
+
+function getClientIp(req) {
+  const forwarded = req.headers['x-forwarded-for'];
+  if (typeof forwarded === 'string' && forwarded.trim()) {
+    return normalizeIp(forwarded.split(',')[0].trim());
+  }
+  return normalizeIp(req.ip || req.socket?.remoteAddress || 'unknown');
+}
+
+function todayKey() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function reserveRefineSlot(ip) {
+  const now = Date.now();
+  const minuteAgo = now - 60_000;
+
+  const timestamps = (perIpRequestWindow.get(ip) || []).filter((t) => t >= minuteAgo);
+  if (timestamps.length >= MAX_REQUESTS_PER_MINUTE_PER_IP) {
+    perIpRequestWindow.set(ip, timestamps);
+    return { ok: false, status: 429, message: 'Rate limit exceeded for this IP. Please wait and try again.' };
+  }
+
+  const lastRequestAt = perIpLastRequestAt.get(ip) || 0;
+  if (now - lastRequestAt < MIN_INTERVAL_BETWEEN_REQUESTS_MS) {
+    return { ok: false, status: 429, message: 'Requests are too frequent. Please slow down.' };
+  }
+
+  const day = todayKey();
+  const dailyKey = `${ip}:${day}`;
+  const dailyCount = perIpDailyUsage.get(dailyKey) || 0;
+  if (dailyCount >= MAX_REQUESTS_PER_DAY_PER_IP) {
+    return { ok: false, status: 429, message: 'Daily refine limit reached for this IP.' };
+  }
+
+  const activeForIp = perIpActiveRefines.get(ip) || 0;
+  if (activeForIp >= MAX_CONCURRENT_REFINES_PER_IP) {
+    return { ok: false, status: 429, message: 'Too many concurrent refine requests for this IP.' };
+  }
+
+  if (activeRefinesGlobal >= MAX_CONCURRENT_REFINES_GLOBAL) {
+    return { ok: false, status: 429, message: 'Server is handling too many concurrent refine requests.' };
+  }
+
+  timestamps.push(now);
+  perIpRequestWindow.set(ip, timestamps);
+  perIpLastRequestAt.set(ip, now);
+  perIpDailyUsage.set(dailyKey, dailyCount + 1);
+  perIpActiveRefines.set(ip, activeForIp + 1);
+  activeRefinesGlobal += 1;
+
+  return { ok: true };
+}
+
+function releaseRefineSlot(ip) {
+  const activeForIp = perIpActiveRefines.get(ip) || 0;
+  if (activeForIp <= 1) {
+    perIpActiveRefines.delete(ip);
+  } else {
+    perIpActiveRefines.set(ip, activeForIp - 1);
+  }
+  activeRefinesGlobal = Math.max(0, activeRefinesGlobal - 1);
+}
+
 app.post('/api/refine', async (req, res) => {
+  if (!LLM_REFINEMENT_ENABLED) {
+    return res.status(503).json({ error: 'LLM refinement is currently disabled by server configuration.' });
+  }
+
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) {
     return res.status(500).json({ error: 'Missing OPENAI_API_KEY server environment variable.' });
   }
 
   const { text, type, customInstruction } = req.body || {};
+  const clientIp = getClientIp(req);
 
   if (typeof text !== 'string' || !text.trim()) {
     return res.status(400).json({ error: '"text" must be a non-empty string.' });
+  }
+
+  if (text.length > MAX_INPUT_CHARS) {
+    return res.status(413).json({ error: `"text" exceeds MAX_INPUT_CHARS (${MAX_INPUT_CHARS}).` });
   }
 
   if (typeof type !== 'string' || !ALLOWED_TYPES.has(type)) {
     return res.status(400).json({ error: '"type" must be one of: slight, prettier, revision, filler, custom.' });
   }
 
+  if (type === 'prettier') {
+    return res.status(400).json({ error: '"prettier" is deterministic and should run locally, not via /api/refine.' });
+  }
+
   if (type === 'custom' && (typeof customInstruction !== 'string' || !customInstruction.trim())) {
     return res.status(400).json({ error: '"customInstruction" is required for type "custom".' });
   }
+
+  const slot = reserveRefineSlot(clientIp);
+  if (!slot.ok) {
+    return res.status(slot.status).json({ error: slot.message });
+  }
+  let slotReleased = false;
+  const releaseSlotIfNeeded = () => {
+    if (!slotReleased) {
+      slotReleased = true;
+      releaseRefineSlot(clientIp);
+    }
+  };
+
+  res.on('close', releaseSlotIfNeeded);
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache, no-transform');
@@ -158,6 +258,7 @@ app.post('/api/refine', async (req, res) => {
   const controller = new AbortController();
   req.on('aborted', () => controller.abort());
   res.on('close', () => {
+    releaseSlotIfNeeded();
     if (!res.writableEnded) {
       controller.abort();
     }
@@ -166,15 +267,6 @@ app.post('/api/refine', async (req, res) => {
   const systemInstruction = getSystemInstruction(type, customInstruction);
   const prompt = `Input: "${text}"\nResponse Format: OBJECT: { "chunks": ARRAY of { "t": "new text", "o": "original or null" } }. Every character must be accounted for.`;
   const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-  console.log(`[refine:${requestId}] request`, {
-    type,
-    model: OPENAI_MODEL,
-    textLength: text.length,
-    customInstructionLength: typeof customInstruction === 'string' ? customInstruction.length : 0,
-    systemInstructionPreview: previewText(systemInstruction),
-    textPreview: previewText(text),
-  });
 
   try {
     const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
@@ -224,7 +316,7 @@ app.post('/api/refine', async (req, res) => {
       const details = await openAiResponse.text();
       console.error(`[refine:${requestId}] openai_error`, {
         status: openAiResponse.status,
-        detailsPreview: previewText(details, 500),
+        details,
       });
       sseEvent(res, 'error', { message: `OpenAI request failed (${openAiResponse.status}). ${details.slice(0, 500)}` });
       sseEvent(res, 'done', { ok: false });
@@ -265,8 +357,6 @@ app.post('/api/refine', async (req, res) => {
           continue;
         }
 
-        console.log(`[refine:${requestId}] sse_event`, eventName);
-
         if (eventName === 'response.output_text.delta' && typeof payload.delta === 'string') {
           accumulatedOutputText += payload.delta;
 
@@ -284,10 +374,6 @@ app.post('/api/refine', async (req, res) => {
               }
             }
 
-            console.log(`[refine:${requestId}] chunk_update`, {
-              chunkCount: chunks.length,
-              lastChunk: chunks[chunks.length - 1] || null,
-            });
             sseEvent(res, 'chunks', { chunks });
           }
         }
@@ -328,10 +414,6 @@ app.post('/api/refine', async (req, res) => {
         const finalPayload = JSON.parse(accumulatedOutputText);
         const parsedArray = sanitizeChunks(Array.isArray(finalPayload) ? finalPayload : finalPayload?.chunks);
         if (parsedArray.length > 0) {
-          console.log(`[refine:${requestId}] fallback_final_chunks`, {
-            chunkCount: parsedArray.length,
-            lastChunk: parsedArray[parsedArray.length - 1] || null,
-          });
           sseEvent(res, 'chunks', { chunks: parsedArray });
         }
       } catch {
@@ -339,10 +421,6 @@ app.post('/api/refine', async (req, res) => {
       }
     }
 
-    console.log(`[refine:${requestId}] done`, {
-      chunkCount: chunks.length,
-      outputPreview: previewText(accumulatedOutputText, 500),
-    });
     sseEvent(res, 'done', { ok: true });
     return res.end();
   } catch (error) {

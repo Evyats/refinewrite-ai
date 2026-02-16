@@ -28,19 +28,50 @@ const parseSseEvents = (buffer: string) => {
   return { parsed, remaining };
 };
 
+const deterministicPrettier = (input: string): string => {
+  const normalizedWhitespace = input
+    .split('\n')
+    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
+    .join('\n')
+    .replace(/[ ]+([.,!?;:])/g, '$1')
+    .replace(/([.,!?;:])([^\s\n])/g, '$1 $2');
+
+  let result = '';
+  let shouldCapitalize = true;
+
+  for (let i = 0; i < normalizedWhitespace.length; i += 1) {
+    const ch = normalizedWhitespace[i];
+    if (shouldCapitalize && /[a-zA-Z]/.test(ch)) {
+      result += ch.toUpperCase();
+      shouldCapitalize = false;
+      continue;
+    }
+
+    result += ch;
+
+    if (/[.!?]/.test(ch)) {
+      shouldCapitalize = true;
+    }
+  }
+
+  return result;
+};
+
 export const refineTextStream = async (
   text: string,
   type: RefinementType,
   onChunk: (chunks: RefinementChunk[]) => void,
-  customInstruction?: string,
-  onDebugEvent?: (event: string, payload?: unknown) => void
+  customInstruction?: string
 ): Promise<void> => {
-  onDebugEvent?.('request_start', {
-    type,
-    textLength: text.length,
-    customInstructionLength: customInstruction?.length || 0,
-    startedAt: new Date().toISOString(),
-  });
+  if (type === RefinementType.PRETTIER) {
+    const prettified = deterministicPrettier(text);
+    const chunks: RefinementChunk[] = prettified === text
+      ? [{ t: text, o: null }]
+      : [{ t: prettified, o: text }];
+
+    onChunk(chunks);
+    return;
+  }
 
   const response = await fetch('/api/refine', {
     method: 'POST',
@@ -54,8 +85,6 @@ export const refineTextStream = async (
     }),
   });
 
-  onDebugEvent?.('response_status', { status: response.status, ok: response.ok });
-
   if (!response.ok) {
     let message = `Refinement failed with status ${response.status}.`;
     try {
@@ -64,12 +93,10 @@ export const refineTextStream = async (
     } catch {
       // Keep generic error.
     }
-    onDebugEvent?.('client_error', { message });
     throw new Error(message);
   }
 
   if (!response.body) {
-    onDebugEvent?.('client_error', { message: 'Refinement stream is unavailable.' });
     throw new Error('Refinement stream is unavailable.');
   }
 
@@ -86,24 +113,17 @@ export const refineTextStream = async (
     buffer = remaining;
 
     for (const evt of parsed) {
-      onDebugEvent?.('sse_event', { event: evt.event });
-
       if (evt.event === 'chunks' && Array.isArray(evt.data?.chunks)) {
         onChunk(evt.data.chunks as RefinementChunk[]);
-        onDebugEvent?.('chunk_update', { chunkCount: evt.data.chunks.length, chunks: evt.data.chunks });
       }
 
       if (evt.event === 'error') {
-        onDebugEvent?.('client_error', { message: evt.data?.message || 'Refinement failed.' });
         throw new Error(evt.data?.message || 'Refinement failed.');
       }
 
       if (evt.event === 'done') {
-        onDebugEvent?.('done');
         return;
       }
     }
   }
-
-  onDebugEvent?.('done');
 };

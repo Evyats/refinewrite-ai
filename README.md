@@ -20,6 +20,14 @@ View your app in AI Studio: https://ai.studio/apps/drive/1QUuYKjiZVxO0DKhAh89Vhh
    - `OPENAI_MODEL=gpt-4o-mini`
    - `GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE`
    - `ALLOWED_EMAIL=your-email@example.com`
+   - Optional safeguards:
+     - `LLM_REFINEMENT_ENABLED=true`
+     - `MAX_INPUT_CHARS=20000`
+     - `MAX_REQUESTS_PER_MINUTE_PER_IP=20`
+     - `MAX_REQUESTS_PER_DAY_PER_IP=300`
+     - `MIN_INTERVAL_BETWEEN_REQUESTS_MS=500`
+     - `MAX_CONCURRENT_REFINES_PER_IP=2`
+     - `MAX_CONCURRENT_REFINES_GLOBAL=40`
 3. Run the app (frontend + backend API):
    `npm run dev`
 

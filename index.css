@@ -19,6 +19,19 @@ body {
   cursor: text;
 }
 
+.editor-content {
+  transition:
+    color var(--theme-transition-ms) ease,
+    background-color var(--theme-transition-ms) ease,
+    filter 360ms ease,
+    opacity 360ms ease;
+}
+
+.editor-content.is-loading {
+  filter: blur(2.4px);
+  opacity: 0.78;
+}
+
 .changed-text {
   background-color: transparent;
   border-bottom: 2px solid transparent;
@@ -50,6 +63,17 @@ body {
   background-color: #166534;
 }
 
+.changed-text-no-animate {
+  animation: none !important;
+  background-color: #dcfce7;
+  border-bottom-color: #22c55e;
+}
+
+.changed-text-dark.changed-text-no-animate {
+  background-color: #14532d;
+  border-bottom-color: #4ade80;
+}
+
 .changed-text .prev-token,
 .changed-text .new-token {
   white-space: pre;
@@ -70,6 +94,17 @@ body {
   display: inline-block;
   opacity: 0;
   animation: changedReveal var(--reveal-duration-ms) ease-out var(--reveal-delay, 0ms) forwards;
+}
+
+.changed-text-no-animate .prev-token {
+  display: none;
+  animation: none !important;
+  opacity: 0;
+}
+
+.changed-text-no-animate .new-token {
+  animation: none !important;
+  opacity: 1;
 }
 
 .changed-burst {

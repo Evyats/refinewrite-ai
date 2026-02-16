@@ -4,6 +4,13 @@ const { extractCompleteObjects, extractTextFromResponsePayload, sanitizeChunks }
 const { sseEvent, setupSseHeaders } = require('../sse');
 const { getClientIp } = require('../network');
 
+const previewText = (value, limit = 180) => {
+  if (typeof value !== 'string') {
+    return '';
+  }
+  return value.length > limit ? `${value.slice(0, limit)}...` : value;
+};
+
 const createOpenAiRequestBody = ({ model, systemInstruction, text }) => {
   const prompt = `Input: "${text}"\nResponse Format: OBJECT: { "chunks": ARRAY of { "t": "new text", "o": "original or null" } }. Every character must be accounted for.`;
 
@@ -47,39 +54,67 @@ const createRefineRouter = ({ config, rateLimiter }) => {
   const router = express.Router();
 
   router.post('/refine', async (req, res) => {
+    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const log = (stage, details) => {
+      if (details !== undefined) {
+        console.info(`[api:refine:${requestId}] ${stage}`, details);
+        return;
+      }
+      console.info(`[api:refine:${requestId}] ${stage}`);
+    };
+
     if (!config.llmRefinementEnabled) {
+      log('blocked_disabled_by_config');
       return res.status(503).json({ error: 'LLM refinement is currently disabled by server configuration.' });
     }
 
     const apiKey = process.env.OPENAI_API_KEY;
     if (!apiKey) {
+      log('blocked_missing_api_key');
       return res.status(500).json({ error: 'Missing OPENAI_API_KEY server environment variable.' });
     }
 
     const { text, type, customInstruction } = req.body || {};
+    const clientIp = getClientIp(req);
+    log('request_received', {
+      method: req.method,
+      path: req.originalUrl,
+      ip: clientIp,
+      type,
+      textLength: typeof text === 'string' ? text.length : null,
+      customInstructionLength: typeof customInstruction === 'string' ? customInstruction.length : null,
+      textPreview: previewText(text),
+      customInstructionPreview: previewText(customInstruction),
+    });
+
     if (typeof text !== 'string' || !text.trim()) {
+      log('validation_failed', { reason: '"text" must be a non-empty string.' });
       return res.status(400).json({ error: '"text" must be a non-empty string.' });
     }
 
     if (text.length > config.maxInputChars) {
+      log('validation_failed', { reason: `"text" exceeds MAX_INPUT_CHARS (${config.maxInputChars}).` });
       return res.status(413).json({ error: `"text" exceeds MAX_INPUT_CHARS (${config.maxInputChars}).` });
     }
 
     if (typeof type !== 'string' || !ALLOWED_TYPES.has(type)) {
+      log('validation_failed', { reason: '"type" must be one of: slight, prettier, revision, filler, custom.' });
       return res.status(400).json({ error: '"type" must be one of: slight, prettier, revision, filler, custom.' });
     }
 
     if (type === 'prettier') {
+      log('validation_failed', { reason: '"prettier" is deterministic and should run locally, not via /api/refine.' });
       return res.status(400).json({ error: '"prettier" is deterministic and should run locally, not via /api/refine.' });
     }
 
     if (type === 'custom' && (typeof customInstruction !== 'string' || !customInstruction.trim())) {
+      log('validation_failed', { reason: '"customInstruction" is required for type "custom".' });
       return res.status(400).json({ error: '"customInstruction" is required for type "custom".' });
     }
 
-    const clientIp = getClientIp(req);
     const slot = rateLimiter.reserve(clientIp);
     if (!slot.ok) {
+      log('rate_limited', { message: slot.message });
       return res.status(slot.status).json({ error: slot.message });
     }
 
@@ -104,9 +139,18 @@ const createRefineRouter = ({ config, rateLimiter }) => {
       }
     });
 
-    const requestId = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
     try {
+      const openAiRequestBody = createOpenAiRequestBody({
+        model: config.openAiModel,
+        systemInstruction: getSystemInstruction(type, customInstruction),
+        text,
+      });
+      log('openai_request_start', {
+        openAiUrl: 'https://api.openai.com/v1/responses',
+        model: config.openAiModel,
+        type,
+      });
+
       const openAiResponse = await fetch('https://api.openai.com/v1/responses', {
         method: 'POST',
         headers: {
@@ -114,13 +158,11 @@ const createRefineRouter = ({ config, rateLimiter }) => {
           Authorization: `Bearer ${apiKey}`,
         },
         signal: controller.signal,
-        body: JSON.stringify(
-          createOpenAiRequestBody({
-            model: config.openAiModel,
-            systemInstruction: getSystemInstruction(type, customInstruction),
-            text,
-          })
-        ),
+        body: JSON.stringify(openAiRequestBody),
+      });
+      log('openai_response_received', {
+        status: openAiResponse.status,
+        statusText: openAiResponse.statusText,
       });
 
       if (!openAiResponse.ok || !openAiResponse.body) {
@@ -139,6 +181,7 @@ const createRefineRouter = ({ config, rateLimiter }) => {
       let accumulatedOutputText = '';
       const chunks = [];
       let processedObjectCount = 0;
+      let sseEventCount = 0;
 
       for await (const part of openAiResponse.body) {
         rawSseBuffer += decoder.decode(part, { stream: true });
@@ -154,6 +197,7 @@ const createRefineRouter = ({ config, rateLimiter }) => {
           }
 
           const eventName = eventLine.slice('event:'.length).trim();
+          sseEventCount += 1;
           const payloadText = dataLines.map((line) => line.slice('data:'.length).trim()).join('\n');
           if (payloadText === '[DONE]') {
             continue;
@@ -182,6 +226,10 @@ const createRefineRouter = ({ config, rateLimiter }) => {
                   // Wait for more stable JSON.
                 }
               }
+              log('chunks_sent', {
+                chunkCount: chunks.length,
+                processedObjectCount,
+              });
               sseEvent(res, 'chunks', { chunks });
             }
           }
@@ -196,6 +244,7 @@ const createRefineRouter = ({ config, rateLimiter }) => {
 
           if (eventName === 'response.error') {
             console.error(`[refine:${requestId}] stream_error`, payload?.error || payload);
+            log('openai_stream_error', payload?.error || payload);
             sseEvent(res, 'error', { message: payload?.error?.message || 'OpenAI stream error.' });
             sseEvent(res, 'done', { ok: false });
             return res.end();
@@ -208,6 +257,7 @@ const createRefineRouter = ({ config, rateLimiter }) => {
               payload?.message ||
               'OpenAI stream failed.';
             console.error(`[refine:${requestId}] stream_failed`, payload);
+            log('openai_stream_failed', payload);
             sseEvent(res, 'error', { message });
             sseEvent(res, 'done', { ok: false });
             return res.end();
@@ -221,23 +271,31 @@ const createRefineRouter = ({ config, rateLimiter }) => {
           const parsedArray = sanitizeChunks(Array.isArray(finalPayload) ? finalPayload : finalPayload?.chunks);
           if (parsedArray.length > 0) {
             sseEvent(res, 'chunks', { chunks: parsedArray });
+            log('final_chunks_sent_from_fallback', { chunkCount: parsedArray.length });
           }
         } catch {
           // No valid final JSON. Keep done response.
         }
       }
 
+      log('request_done', {
+        ok: true,
+        chunkCount: chunks.length,
+        sseEventCount,
+      });
       sseEvent(res, 'done', { ok: true });
       return res.end();
     } catch (error) {
       if (error && error.name === 'AbortError') {
         console.warn(`[refine:${requestId}] aborted_by_client`);
+        log('aborted_by_client');
         return res.end();
       }
 
       console.error(`[refine:${requestId}] exception`, {
         message: error?.message || 'Unknown error',
       });
+      log('exception', { message: error?.message || 'Unknown error' });
       sseEvent(res, 'error', { message: error?.message || 'Failed to refine text incrementally.' });
       sseEvent(res, 'done', { ok: false });
       return res.end();

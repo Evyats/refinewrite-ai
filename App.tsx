@@ -8,6 +8,7 @@ import { useTheme } from './hooks/useTheme';
 import { useKeyboardShortcut } from './hooks/useKeyboardShortcut';
 import { useNetworkInfo } from './hooks/useNetworkInfo';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
+import { useOpenAiStatus } from './hooks/useOpenAiStatus';
 import { refineTextStream } from './services/openai';
 import { EditorState, RefinementChunk, RefinementType, UserProfile } from './types';
 import { granularizeChunks } from './utils/chunkDiff';
@@ -30,6 +31,7 @@ const App: React.FC = () => {
   useKeyboardShortcut(toggleDarkMode);
   const networkInfo = useNetworkInfo();
   const { authError, signOut } = useGoogleAuth({ user: state.user, setUser });
+  const { status: openAiStatus, statusMessage: openAiStatusMessage, markReady: markOpenAiReady } = useOpenAiStatus();
 
   const themeTransitionStyle = useMemo(
     () => ({
@@ -47,16 +49,24 @@ const App: React.FC = () => {
   }, []);
 
   const handleRefine = async (type: RefinementType, customPrompt?: string) => {
-    if (!state.text.trim()) {
+    const plainText = state.chunks.length > 0 ? state.chunks.map((chunk) => chunk.t).join('') : state.text;
+
+    if (!plainText.trim()) {
       setState((previous) => ({ ...previous, error: 'Please enter some text first.' }));
       return;
     }
 
-    setState((previous) => ({ ...previous, isLoading: true, error: null, chunks: [] }));
+    setState((previous) => ({
+      ...previous,
+      text: plainText,
+      isLoading: true,
+      error: null,
+      chunks: [],
+    }));
 
     try {
       await refineTextStream(
-        state.text,
+        plainText,
         type,
         (incomingChunks) => {
           const granularChunks = granularizeChunks(incomingChunks);
@@ -69,6 +79,8 @@ const App: React.FC = () => {
         },
         customPrompt
       );
+      // If a refine request succeeded, OpenAI is effectively available for this session.
+      markOpenAiReady();
       setState((previous) => ({ ...previous, isLoading: false }));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Refinement failed.';
@@ -329,10 +341,23 @@ const App: React.FC = () => {
                   <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-ping"></span>
                   Streaming AI...
                 </span>
-              ) : (
+              ) : openAiStatus === 'checking' ? (
+                <span className="flex items-center gap-1.5 text-amber-600" title="Checking OpenAI integration...">
+                  <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                  Checking AI...
+                </span>
+              ) : openAiStatus === 'ready' ? (
                 <span className="flex items-center gap-1.5 text-green-600">
                   <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
                   Ready
+                </span>
+              ) : (
+                <span
+                  className="flex items-center gap-1.5 text-red-600"
+                  title={openAiStatusMessage || 'OpenAI integration is unavailable.'}
+                >
+                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+                  AI Unavailable
                 </span>
               )}
             </div>

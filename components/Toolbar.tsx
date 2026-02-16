@@ -13,7 +13,6 @@ interface ToolbarProps {
 interface ActionButton {
   type: RefinementType;
   label: string;
-  icon: React.ReactNode;
   description: string;
 }
 
@@ -24,25 +23,21 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
     {
       type: RefinementType.SLIGHT,
       label: 'Slight',
-      icon: <span aria-hidden="true">{'?'}</span>,
       description: 'Grammar, spelling, and surgical fixes.',
     },
     {
       type: RefinementType.PRETTIER,
       label: 'Prettier',
-      icon: <span aria-hidden="true">{'??'}</span>,
       description: 'Fix spacing and caps.',
     },
     {
       type: RefinementType.REVISION,
       label: 'Revise',
-      icon: <span aria-hidden="true">{'??'}</span>,
       description: 'Full professional rewrite.',
     },
     {
       type: RefinementType.FILLER,
       label: 'Fill',
-      icon: <span aria-hidden="true">{'???'}</span>,
       description: 'Replace "___" placeholders.',
     },
   ];
@@ -64,10 +59,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
               onClick={() => onRefine(button.type)}
               disabled={isLoading}
               className={`
-                flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
+                flex items-center px-3 py-1.5 rounded-lg text-xs font-bold transition-all
                 ${
                   isLoading
-                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    ? isDarkMode
+                      ? 'bg-slate-800 text-slate-500 border border-slate-700 cursor-not-allowed'
+                      : 'bg-gray-100 text-gray-400 cursor-not-allowed'
                     : isDarkMode
                       ? 'bg-indigo-950/60 text-indigo-200 hover:bg-indigo-900 active:scale-95 border border-indigo-800/70 shadow-sm'
                       : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:scale-95 border border-indigo-100 shadow-sm'
@@ -75,7 +72,6 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
               `}
               title={button.description}
             >
-              <span>{button.icon}</span>
               <span>{button.label}</span>
             </button>
           ))}
@@ -130,7 +126,11 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
             type="submit"
             disabled={isLoading || !customInput.trim()}
             className={`absolute right-1 top-1 bottom-1 px-3 rounded-lg text-xs font-bold transition-all ${
-              isLoading || !customInput.trim() ? 'bg-gray-200 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+              isLoading || !customInput.trim()
+                ? isDarkMode
+                  ? 'bg-slate-700 text-slate-500'
+                  : 'bg-gray-200 text-gray-400'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
             }`}
           >
             Run

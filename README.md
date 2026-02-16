@@ -1,46 +1,66 @@
-<div align="center">
-<img width="1200" height="475" alt="GHBanner" src="https://github.com/user-attachments/assets/0aa67016-6eaf-458a-adb2-6e31a0763ed6" />
-</div>
+# RefineWrite AI
 
-# Run and deploy RefineWrite AI
+RefineWrite is a React + Express editing app with:
+- Google OAuth sign-in (single allowed email)
+- Deterministic local `Prettier` mode
+- Server-side OpenAI refinement for other modes via SSE streaming
+- Inline changed-word highlighting and edit-back behavior
 
-## Run locally
+## Tech stack
 
-**Prerequisites:** Node.js
+- Frontend: React + Vite + TypeScript + Tailwind classes + Framer Motion
+- Backend: Express (`server.js` + `server/*`)
+- Testing: Vitest
+
+## Local development
+
+Prerequisite: Node.js 18+
 
 1. Install dependencies:
-   `npm install`
-2. Set environment variables in `.env.local`:
-   - `OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE`
-   - `OPENAI_MODEL=gpt-4o-mini`
-   - `GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE`
-   - `ALLOWED_EMAIL=your-email@example.com`
-   - Optional safeguards:
-     - `LLM_REFINEMENT_ENABLED=true`
-     - `MAX_INPUT_CHARS=20000`
-     - `MAX_REQUESTS_PER_MINUTE_PER_IP=20`
-     - `MAX_REQUESTS_PER_DAY_PER_IP=300`
-     - `MIN_INTERVAL_BETWEEN_REQUESTS_MS=500`
-     - `MAX_CONCURRENT_REFINES_PER_IP=2`
-     - `MAX_CONCURRENT_REFINES_GLOBAL=40`
-3. Run the app (frontend + backend API):
-   `npm run dev`
+`npm install`
 
-## Validate changes
+2. Create `.env.local`:
+```env
+OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE
+OPENAI_MODEL=gpt-4o-mini
+GOOGLE_CLIENT_ID=YOUR_GOOGLE_CLIENT_ID_HERE
+ALLOWED_EMAIL=your-email@example.com
 
+# Optional safeguard controls
+LLM_REFINEMENT_ENABLED=true
+MAX_INPUT_CHARS=20000
+MAX_REQUESTS_PER_MINUTE_PER_IP=20
+MAX_REQUESTS_PER_DAY_PER_IP=300
+MIN_INTERVAL_BETWEEN_REQUESTS_MS=500
+MAX_CONCURRENT_REFINES_PER_IP=2
+MAX_CONCURRENT_REFINES_GLOBAL=40
+```
+
+3. Run frontend + backend:
+`npm run dev`
+
+4. Open:
+`http://localhost:43123`
+
+## Commands
+
+- Dev: `npm run dev`
 - Build: `npm run build`
+- Preview build: `npm run preview`
+- API server only: `npm run dev:api`
+- Frontend only: `npm run dev:web`
 - Tests: `npm test`
 
-## Security model
+## Security notes
 
-- The OpenAI key is server-only (`OPENAI_API_KEY`) and never sent to the browser.
-- The frontend calls `/api/refine`; the server calls OpenAI.
+- `OPENAI_API_KEY` is server-only and is never exposed to the client bundle.
+- The browser calls `/api/refine`; only the server talks to OpenAI.
+- OAuth access is restricted to `ALLOWED_EMAIL`.
 
-## Vercel deployment
+## Deploy (Vercel or similar)
 
-Set these environment variables in your Vercel project:
-
+Set these env vars in the deployment project:
 - `OPENAI_API_KEY`
-- `OPENAI_MODEL` (optional; defaults to `gpt-4o-mini`)
+- `OPENAI_MODEL` (optional)
 - `GOOGLE_CLIENT_ID`
 - `ALLOWED_EMAIL`

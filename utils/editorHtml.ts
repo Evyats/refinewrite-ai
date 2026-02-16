@@ -14,7 +14,12 @@ const escapeAttr = (value: string) =>
 
 const splitWordsAndSpaces = (value: string) => value.match(/\s+|[^\s]+/g) || [value];
 
-export const buildEditorHtml = (chunks: RefinementChunk[], text: string, isDarkMode: boolean): string => {
+export const buildEditorHtml = (
+  chunks: RefinementChunk[],
+  text: string,
+  isDarkMode: boolean,
+  animateChangedTokens: boolean
+): string => {
   if (chunks.length === 0) {
     return escapeHtml(text).replace(/\n/g, '<br/>');
   }
@@ -28,7 +33,9 @@ export const buildEditorHtml = (chunks: RefinementChunk[], text: string, isDarkM
       }
 
       const escapedOriginal = escapeAttr(chunk.o);
-      const changedClass = isDarkMode ? 'changed-text changed-text-dark' : 'changed-text';
+      const changedClass = `${isDarkMode ? 'changed-text changed-text-dark' : 'changed-text'}${
+        animateChangedTokens ? '' : ' changed-text-no-animate'
+      }`;
       const parts = splitWordsAndSpaces(chunk.t);
       const originalWordParts = splitWordsAndSpaces(chunk.o).filter((part) => !/^\s+$/.test(part));
       let originalWordIndex = 0;

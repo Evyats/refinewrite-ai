@@ -4,14 +4,9 @@
 
 # Run and deploy RefineWrite AI
 
-This contains everything you need to run your app locally.
+## Run locally
 
-View your app in AI Studio: https://ai.studio/apps/drive/1QUuYKjiZVxO0DKhAh89VhhTrgRgELVoM
-
-## Run Locally
-
-**Prerequisites:**  Node.js
-
+**Prerequisites:** Node.js
 
 1. Install dependencies:
    `npm install`
@@ -31,12 +26,17 @@ View your app in AI Studio: https://ai.studio/apps/drive/1QUuYKjiZVxO0DKhAh89Vhh
 3. Run the app (frontend + backend API):
    `npm run dev`
 
+## Validate changes
+
+- Build: `npm run build`
+- Tests: `npm test`
+
 ## Security model
 
-- The OpenAI key is server-only (`OPENAI_API_KEY`) and is never sent to the browser.
-- The frontend calls `/api/refine`, and the server calls OpenAI.
+- The OpenAI key is server-only (`OPENAI_API_KEY`) and never sent to the browser.
+- The frontend calls `/api/refine`; the server calls OpenAI.
 
-## Vercel deployment notes
+## Vercel deployment
 
 Set these environment variables in your Vercel project:
 

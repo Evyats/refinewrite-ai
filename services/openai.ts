@@ -1,6 +1,12 @@
-import { RefinementType, RefinementChunk } from '../types';
+import { RefinementChunk, RefinementType } from '../types';
+import { deterministicPrettier } from './prettier';
 
-const parseSseEvents = (buffer: string) => {
+interface ParsedSseEvent {
+  event: string;
+  data: unknown;
+}
+
+const parseSseEvents = (buffer: string): { parsed: ParsedSseEvent[]; remaining: string } => {
   const frames = buffer.split('\n\n');
   const remaining = frames.pop() || '';
 
@@ -9,7 +15,6 @@ const parseSseEvents = (buffer: string) => {
       const lines = frame.split('\n');
       const eventLine = lines.find((line) => line.startsWith('event:'));
       const dataLines = lines.filter((line) => line.startsWith('data:'));
-
       if (!eventLine || dataLines.length === 0) {
         return null;
       }
@@ -18,43 +23,14 @@ const parseSseEvents = (buffer: string) => {
       const dataText = dataLines.map((line) => line.slice('data:'.length).trim()).join('\n');
 
       try {
-        return { event, data: JSON.parse(dataText) };
+        return { event, data: JSON.parse(dataText) } as ParsedSseEvent;
       } catch {
         return null;
       }
     })
-    .filter((item): item is { event: string; data: any } => item !== null);
+    .filter((event): event is ParsedSseEvent => event !== null);
 
   return { parsed, remaining };
-};
-
-const deterministicPrettier = (input: string): string => {
-  const normalizedWhitespace = input
-    .split('\n')
-    .map((line) => line.replace(/[ \t]+/g, ' ').trim())
-    .join('\n')
-    .replace(/[ ]+([.,!?;:])/g, '$1')
-    .replace(/([.,!?;:])([^\s\n])/g, '$1 $2');
-
-  let result = '';
-  let shouldCapitalize = true;
-
-  for (let i = 0; i < normalizedWhitespace.length; i += 1) {
-    const ch = normalizedWhitespace[i];
-    if (shouldCapitalize && /[a-zA-Z]/.test(ch)) {
-      result += ch.toUpperCase();
-      shouldCapitalize = false;
-      continue;
-    }
-
-    result += ch;
-
-    if (/[.!?]/.test(ch)) {
-      shouldCapitalize = true;
-    }
-  }
-
-  return result;
 };
 
 export const refineTextStream = async (
@@ -65,9 +41,8 @@ export const refineTextStream = async (
 ): Promise<void> => {
   if (type === RefinementType.PRETTIER) {
     const prettified = deterministicPrettier(text);
-    const chunks: RefinementChunk[] = prettified === text
-      ? [{ t: text, o: null }]
-      : [{ t: prettified, o: text }];
+    const chunks: RefinementChunk[] =
+      prettified === text ? [{ t: text, o: null }] : [{ t: prettified, o: text }];
 
     onChunk(chunks);
     return;
@@ -88,8 +63,10 @@ export const refineTextStream = async (
   if (!response.ok) {
     let message = `Refinement failed with status ${response.status}.`;
     try {
-      const data = await response.json();
-      if (data?.error) message = data.error;
+      const payload = (await response.json()) as { error?: string };
+      if (payload?.error) {
+        message = payload.error;
+      }
     } catch {
       // Keep generic error.
     }
@@ -106,24 +83,32 @@ export const refineTextStream = async (
 
   while (true) {
     const { done, value } = await reader.read();
-    if (done) break;
+    if (done) {
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
     const { parsed, remaining } = parseSseEvents(buffer);
     buffer = remaining;
 
-    for (const evt of parsed) {
-      if (evt.event === 'chunks' && Array.isArray(evt.data?.chunks)) {
-        onChunk(evt.data.chunks as RefinementChunk[]);
+    for (const event of parsed) {
+      if (event.event === 'chunks') {
+        const data = event.data as { chunks?: RefinementChunk[] };
+        if (Array.isArray(data?.chunks)) {
+          onChunk(data.chunks);
+        }
       }
 
-      if (evt.event === 'error') {
-        throw new Error(evt.data?.message || 'Refinement failed.');
+      if (event.event === 'error') {
+        const data = event.data as { message?: string };
+        throw new Error(data?.message || 'Refinement failed.');
       }
 
-      if (evt.event === 'done') {
+      if (event.event === 'done') {
         return;
       }
     }
   }
 };
+
+export { deterministicPrettier };

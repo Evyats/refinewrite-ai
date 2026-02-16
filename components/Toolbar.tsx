@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { RefinementType } from '../types';
 
@@ -11,48 +10,77 @@ interface ToolbarProps {
   isDarkMode: boolean;
 }
 
+interface ActionButton {
+  type: RefinementType;
+  label: string;
+  icon: React.ReactNode;
+  description: string;
+}
+
 const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear, onLoadDefaultText, isDarkMode }) => {
   const [customInput, setCustomInput] = useState('');
 
-  const buttons = [
-    { type: RefinementType.SLIGHT, label: 'Slight', icon: '✨', description: 'Grammar, spelling, and surgical fixes.' },
-    { type: RefinementType.PRETTIER, label: 'Prettier', icon: '🎨', description: 'Fix spacing and caps.' },
-    { type: RefinementType.REVISION, label: 'Revise', icon: '📝', description: 'Full professional rewrite.' },
-    { type: RefinementType.FILLER, label: 'Fill', icon: '🕳️', description: 'Replace "___" placeholders.' },
+  const buttons: ActionButton[] = [
+    {
+      type: RefinementType.SLIGHT,
+      label: 'Slight',
+      icon: <span aria-hidden="true">{'?'}</span>,
+      description: 'Grammar, spelling, and surgical fixes.',
+    },
+    {
+      type: RefinementType.PRETTIER,
+      label: 'Prettier',
+      icon: <span aria-hidden="true">{'??'}</span>,
+      description: 'Fix spacing and caps.',
+    },
+    {
+      type: RefinementType.REVISION,
+      label: 'Revise',
+      icon: <span aria-hidden="true">{'??'}</span>,
+      description: 'Full professional rewrite.',
+    },
+    {
+      type: RefinementType.FILLER,
+      label: 'Fill',
+      icon: <span aria-hidden="true">{'???'}</span>,
+      description: 'Replace "___" placeholders.',
+    },
   ];
 
-  const handleCustomSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCustomSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     if (customInput.trim()) {
       onRefine(RefinementType.CUSTOM, customInput);
     }
   };
 
   return (
-    <div className={`flex flex-col gap-3 p-4 border-b sticky top-0 z-10 shadow-sm transition-colors duration-500 ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`}>
+    <div className={`flex flex-col gap-3 p-4 border-b sticky top-0 z-10 shadow-sm transition-colors ${isDarkMode ? 'bg-slate-900 border-slate-700' : 'bg-white border-gray-200'}`} style={{ transitionDuration: 'var(--theme-transition-ms)' }}>
       <div className="flex flex-wrap items-center gap-2">
         <div className="flex flex-wrap gap-2 flex-grow">
-          {buttons.map((btn) => (
+          {buttons.map((button) => (
             <button
-              key={btn.type}
-              onClick={() => onRefine(btn.type)}
+              key={button.type}
+              onClick={() => onRefine(button.type)}
               disabled={isLoading}
               className={`
                 flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-all
-                ${isLoading 
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed' 
-                  : isDarkMode
-                    ? 'bg-indigo-950/60 text-indigo-200 hover:bg-indigo-900 active:scale-95 border border-indigo-800/70 shadow-sm'
-                    : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:scale-95 border border-indigo-100 shadow-sm'}
+                ${
+                  isLoading
+                    ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                    : isDarkMode
+                      ? 'bg-indigo-950/60 text-indigo-200 hover:bg-indigo-900 active:scale-95 border border-indigo-800/70 shadow-sm'
+                      : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100 active:scale-95 border border-indigo-100 shadow-sm'
+                }
               `}
-              title={btn.description}
+              title={button.description}
             >
-              <span>{btn.icon}</span>
-              <span>{btn.label}</span>
+              <span>{button.icon}</span>
+              <span>{button.label}</span>
             </button>
           ))}
         </div>
-        
+
         <div className="flex gap-2">
           <button
             onClick={onLoadDefaultText}
@@ -88,22 +116,22 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
 
       <form onSubmit={handleCustomSubmit} className="flex gap-2">
         <div className="relative flex-grow">
-          <input 
+          <input
             type="text"
             id="custom-instruction"
             name="customInstruction"
             value={customInput}
-            onChange={(e) => setCustomInput(e.target.value)}
+            onChange={(event) => setCustomInput(event.target.value)}
             placeholder="Custom instruction (e.g. 'Make it more formal', 'Translate to German'...)"
             disabled={isLoading}
             className={`w-full border rounded-xl px-4 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-400 transition-all ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-100 placeholder:text-slate-400' : 'bg-gray-50 border-gray-200 text-gray-900'}`}
           />
-          <button 
+          <button
             type="submit"
             disabled={isLoading || !customInput.trim()}
-            className={`absolute right-1 top-1 bottom-1 px-3 rounded-lg text-xs font-bold transition-all
-              ${isLoading || !customInput.trim() ? 'bg-gray-200 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'}
-            `}
+            className={`absolute right-1 top-1 bottom-1 px-3 rounded-lg text-xs font-bold transition-all ${
+              isLoading || !customInput.trim() ? 'bg-gray-200 text-gray-400' : 'bg-indigo-600 text-white hover:bg-indigo-700 shadow-sm'
+            }`}
           >
             Run
           </button>

@@ -4,7 +4,7 @@
   --theme-transition-ms: 600ms;
   --reveal-stagger-ms: 100ms;
   --reveal-duration-ms: 240ms;
-  --unmark-duration-ms: 220ms;
+  --unmark-duration-ms: 700ms;
   --loading-shimmer-duration: 1.2s;
 }
 
@@ -51,6 +51,11 @@ body {
 .changed-text-unmarking {
   animation: changedUnmarkPop var(--unmark-duration-ms) ease-out forwards !important;
   background-color: transparent !important;
+}
+
+.changed-text-clearing {
+  background-color: transparent !important;
+  border-bottom-color: transparent !important;
 }
 
 .changed-text-dark {
@@ -118,8 +123,8 @@ body {
 
 .changed-burst-dot {
   position: absolute;
-  width: 4px;
-  height: 4px;
+  width: var(--burst-dot-size, 4px);
+  height: var(--burst-dot-size, 4px);
   border-radius: 9999px;
   background: #22c55e;
   box-shadow: 0 0 0.35rem rgba(34, 197, 94, 0.55);
@@ -144,11 +149,13 @@ body {
   z-index: 50;
   bottom: 125%;
   left: 50%;
-  margin-left: -60px;
+  transform: translateX(-50%);
   opacity: 0;
   transition: opacity 0.3s;
   font-size: 0.75rem;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  max-width: 260px;
+  min-width: max-content;
   pointer-events: none;
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }

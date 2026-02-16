@@ -51,7 +51,7 @@ export const buildEditorHtml = (
           const delayMs = changedRevealOrder * EDITOR_MOTION.revealStaggerMs;
           changedRevealOrder += 1;
 
-          return `<span class="${changedClass}" style="--reveal-delay:${delayMs}ms;" data-new-token="${escapeAttr(part)}" data-original="${escapedOriginal}" data-chunk-index="${index}"><span class="prev-token">${escapeHtml(previousWord)}</span><span class="new-token">${escapeHtml(part)}</span><span class="tooltip">Original: ${escapedOriginal}</span></span>`;
+          return `<span class="${changedClass}" style="--reveal-delay:${delayMs}ms;" data-new-token="${escapeAttr(part)}" data-original="${escapedOriginal}" data-chunk-index="${index}"><span class="prev-token">${escapeHtml(previousWord)}</span><span class="new-token">${escapeHtml(part)}</span><span class="tooltip">${escapedOriginal}</span></span>`;
         })
         .join('');
     })

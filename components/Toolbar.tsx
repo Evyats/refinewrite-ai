@@ -81,7 +81,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
           <button
             onClick={onLoadDefaultText}
             disabled={isLoading}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'text-slate-400 hover:text-indigo-200 hover:bg-indigo-900/30' : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'}`}
+            className={`p-2 rounded-lg transition-all active:scale-95 ${
+              isLoading
+                ? isDarkMode
+                  ? 'text-slate-600 cursor-not-allowed'
+                  : 'text-gray-300 cursor-not-allowed'
+                : isDarkMode
+                  ? 'text-slate-400 hover:text-indigo-200 hover:bg-indigo-900/30'
+                  : 'text-gray-400 hover:text-indigo-600 hover:bg-indigo-50'
+            }`}
             title="Load default sample text"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -91,7 +99,15 @@ const Toolbar: React.FC<ToolbarProps> = ({ onRefine, onCopy, isLoading, onClear,
           <button
             onClick={onClear}
             disabled={isLoading}
-            className={`p-2 rounded-lg transition-colors ${isDarkMode ? 'text-slate-400 hover:text-red-300 hover:bg-red-900/30' : 'text-gray-400 hover:text-red-600 hover:bg-red-50'}`}
+            className={`p-2 rounded-lg transition-all active:scale-95 ${
+              isLoading
+                ? isDarkMode
+                  ? 'text-slate-600 cursor-not-allowed'
+                  : 'text-gray-300 cursor-not-allowed'
+                : isDarkMode
+                  ? 'text-slate-400 hover:text-red-300 hover:bg-red-900/30'
+                  : 'text-gray-400 hover:text-red-600 hover:bg-red-50'
+            }`}
             title="Clear editor"
           >
             <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">

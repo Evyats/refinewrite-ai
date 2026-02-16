@@ -10,8 +10,19 @@ import { useNetworkInfo } from './hooks/useNetworkInfo';
 import { useGoogleAuth } from './hooks/useGoogleAuth';
 import { useOpenAiStatus } from './hooks/useOpenAiStatus';
 import { refineTextStream } from './services/openai';
-import { EditorState, RefinementChunk, RefinementType, UserProfile } from './types';
+import { BurstPreset, EditorState, RefinementChunk, RefinementType, UserProfile } from './types';
 import { granularizeChunks } from './utils/chunkDiff';
+
+const BALANCED_BURST_PRESET: BurstPreset = {
+  id: 'balanced',
+  label: 'Balanced',
+  particleCount: 6,
+  durationMs: 700,
+  dotSizePx: 4,
+  baseDistancePx: 18,
+  distanceVariancePx: 6,
+  spreadDeg: 360,
+};
 
 const App: React.FC = () => {
   const [state, setState] = useState<EditorState>({
@@ -136,9 +147,13 @@ const App: React.FC = () => {
             <div className="flex justify-end mb-2">
               <button
                 onClick={toggleDarkMode}
-                aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                className={isDarkMode ? 'p-2 text-slate-200 hover:text-white transition-colors' : 'p-2 text-gray-500 hover:text-gray-900 transition-colors'}
+                aria-label={isDarkMode ? 'Switch to light mode (Ctrl+Shift+L)' : 'Switch to dark mode (Ctrl+Shift+L)'}
+                title={isDarkMode ? 'Switch to light mode (Ctrl+Shift+L)' : 'Switch to dark mode (Ctrl+Shift+L)'}
+                className={
+                  isDarkMode
+                    ? 'inline-flex items-center justify-center p-2 text-slate-200 hover:text-white transition-colors'
+                    : 'inline-flex items-center justify-center p-2 text-gray-500 hover:text-gray-900 transition-colors'
+                }
               >
                 <AnimatePresence mode="wait" initial={false}>
                   <motion.span
@@ -258,9 +273,9 @@ const App: React.FC = () => {
               <div className="pl-4 border-l border-indigo-400/50">
                 <button
                   onClick={toggleDarkMode}
-                  aria-label={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  title={isDarkMode ? 'Switch to light mode' : 'Switch to dark mode'}
-                  className="p-2 text-indigo-100 hover:text-white transition-colors"
+                  aria-label={isDarkMode ? 'Switch to light mode (Ctrl+Shift+L)' : 'Switch to dark mode (Ctrl+Shift+L)'}
+                  title={isDarkMode ? 'Switch to light mode (Ctrl+Shift+L)' : 'Switch to dark mode (Ctrl+Shift+L)'}
+                  className="inline-flex items-center justify-center p-2 text-indigo-100 hover:text-white transition-colors"
                 >
                   <AnimatePresence mode="wait" initial={false}>
                     <motion.span
@@ -321,46 +336,56 @@ const App: React.FC = () => {
             )}
           </AnimatePresence>
 
-          <Editor text={state.text} chunks={state.chunks} onChange={handleTextChange} isLoading={state.isLoading} isDarkMode={isDarkMode} />
+          <Editor
+            text={state.text}
+            chunks={state.chunks}
+            onChange={handleTextChange}
+            isLoading={state.isLoading}
+            isDarkMode={isDarkMode}
+            burstPreset={BALANCED_BURST_PRESET}
+          />
 
           <div
-            className={`px-6 py-4 border-t text-[11px] flex justify-between items-center transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-gray-50 border-gray-100 text-gray-500'}`}
+            className={`px-6 py-4 border-t text-[11px] flex flex-col gap-3 transition-colors ${isDarkMode ? 'bg-slate-800 border-slate-700 text-slate-300' : 'bg-gray-50 border-gray-100 text-gray-500'}`}
             style={{ transitionDuration: 'var(--theme-transition-ms)' }}
           >
-            <div className="flex gap-4">
-              <span>
-                <strong>{state.text.length}</strong> chars
-              </span>
-              <span>
-                <strong>{state.text.trim() === '' ? 0 : state.text.trim().split(/\s+/).length}</strong> words
-              </span>
+            <div className="flex justify-between items-center w-full">
+              <div className="flex gap-4">
+                <span>
+                  <strong>{state.text.length}</strong> chars
+                </span>
+                <span>
+                  <strong>{state.text.trim() === '' ? 0 : state.text.trim().split(/\s+/).length}</strong> words
+                </span>
+              </div>
+              <div className="flex gap-4 font-bold uppercase tracking-widest">
+                {state.isLoading ? (
+                  <span className="flex items-center gap-1.5 text-indigo-600">
+                    <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-ping"></span>
+                    Streaming AI...
+                  </span>
+                ) : openAiStatus === 'checking' ? (
+                  <span className="flex items-center gap-1.5 text-amber-600" title="Checking OpenAI integration...">
+                    <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
+                    Checking AI...
+                  </span>
+                ) : openAiStatus === 'ready' ? (
+                  <span className="flex items-center gap-1.5 text-green-600">
+                    <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
+                    Ready
+                  </span>
+                ) : (
+                  <span
+                    className="flex items-center gap-1.5 text-red-600"
+                    title={openAiStatusMessage || 'OpenAI integration is unavailable.'}
+                  >
+                    <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
+                    AI Unavailable
+                  </span>
+                )}
+              </div>
             </div>
-            <div className="flex gap-4 font-bold uppercase tracking-widest">
-              {state.isLoading ? (
-                <span className="flex items-center gap-1.5 text-indigo-600">
-                  <span className="w-2.5 h-2.5 bg-indigo-600 rounded-full animate-ping"></span>
-                  Streaming AI...
-                </span>
-              ) : openAiStatus === 'checking' ? (
-                <span className="flex items-center gap-1.5 text-amber-600" title="Checking OpenAI integration...">
-                  <span className="w-2.5 h-2.5 bg-amber-500 rounded-full animate-pulse"></span>
-                  Checking AI...
-                </span>
-              ) : openAiStatus === 'ready' ? (
-                <span className="flex items-center gap-1.5 text-green-600">
-                  <span className="w-2.5 h-2.5 bg-green-500 rounded-full"></span>
-                  Ready
-                </span>
-              ) : (
-                <span
-                  className="flex items-center gap-1.5 text-red-600"
-                  title={openAiStatusMessage || 'OpenAI integration is unavailable.'}
-                >
-                  <span className="w-2.5 h-2.5 bg-red-500 rounded-full"></span>
-                  AI Unavailable
-                </span>
-              )}
-            </div>
+
           </div>
         </motion.div>
       </div>

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { RefinementChunk } from '../types';
+import { BurstPreset, RefinementChunk } from '../types';
 import { EDITOR_MOTION } from '../constants/motion';
 import { buildEditorHtml, insertPlainTextAtSelection, placeCaretAtTextNodeEnd } from '../utils/editorHtml';
 
@@ -9,6 +9,7 @@ interface EditorProps {
   onChange: (text: string, nextChunks?: RefinementChunk[]) => void;
   isLoading: boolean;
   isDarkMode: boolean;
+  burstPreset: BurstPreset;
 }
 
 const pushMergedChunk = (list: RefinementChunk[], chunk: RefinementChunk) => {
@@ -58,7 +59,32 @@ const extractChunksFromEditorDom = (root: HTMLElement): RefinementChunk[] => {
   return result;
 };
 
-const Editor: React.FC<EditorProps> = ({ text, chunks, onChange, isLoading, isDarkMode }) => {
+const getCaretRangeFromPoint = (clientX: number, clientY: number): Range | null => {
+  const docWithLegacyCaret = document as Document & {
+    caretRangeFromPoint?: (x: number, y: number) => Range | null;
+    caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null;
+  };
+
+  if (typeof docWithLegacyCaret.caretRangeFromPoint === 'function') {
+    return docWithLegacyCaret.caretRangeFromPoint(clientX, clientY);
+  }
+
+  if (typeof docWithLegacyCaret.caretPositionFromPoint === 'function') {
+    const position = docWithLegacyCaret.caretPositionFromPoint(clientX, clientY);
+    if (!position) {
+      return null;
+    }
+
+    const range = document.createRange();
+    range.setStart(position.offsetNode, position.offset);
+    range.collapse(true);
+    return range;
+  }
+
+  return null;
+};
+
+const Editor: React.FC<EditorProps> = ({ text, chunks, onChange, isLoading, isDarkMode, burstPreset }) => {
   const editorRef = useRef<HTMLDivElement>(null);
   const [isFocused, setIsFocused] = useState(false);
   const lastSyncedHtmlRef = useRef('');
@@ -126,18 +152,44 @@ const Editor: React.FC<EditorProps> = ({ text, chunks, onChange, isLoading, isDa
       const chunkIndex = typeof indexAttr === 'string' ? Number(indexAttr) : NaN;
       const canApplyTargetedChunkUpdate =
         Number.isInteger(chunkIndex) && chunkIndex >= 0 && chunkIndex < chunks.length;
+      const clickedRange = getCaretRangeFromPoint(event.clientX, event.clientY);
+      const newTokenText = changedNode.dataset.newToken || changedNode.textContent || '';
+      let clickedOffset = newTokenText.length;
+      if (clickedRange && changedNode.contains(clickedRange.startContainer)) {
+        clickedOffset = Math.max(0, Math.min(newTokenText.length, clickedRange.startOffset));
+      }
 
       const burst = document.createElement('span');
       burst.className = 'changed-burst';
-      for (let i = 0; i < EDITOR_MOTION.burstDotCount; i += 1) {
+      changedNode.style.setProperty('--unmark-duration-ms', `${burstPreset.durationMs}ms`);
+      for (let i = 0; i < burstPreset.particleCount; i += 1) {
         const dot = document.createElement('span');
         dot.className = 'changed-burst-dot';
-        dot.style.setProperty('--burst-angle', `${i * (360 / EDITOR_MOTION.burstDotCount)}deg`);
-        dot.style.setProperty('--burst-distance', `${16 + (i % 2) * 6}px`);
+        let angleDeg = i * (burstPreset.spreadDeg / burstPreset.particleCount);
+        if (burstPreset.pattern === 'horizontal') {
+          const sideAngle = i % 2 === 0 ? 0 : 180;
+          const jitterStep = (Math.floor(i / 2) % 3) - 1; // -1, 0, 1
+          angleDeg = sideAngle + jitterStep * 12;
+        }
+        dot.style.setProperty('--burst-angle', `${angleDeg}deg`);
+        dot.style.setProperty(
+          '--burst-distance',
+          `${burstPreset.baseDistancePx + ((i % 3) - 1) * burstPreset.distanceVariancePx}px`
+        );
+        dot.style.setProperty('--burst-dot-size', `${burstPreset.dotSizePx}px`);
         burst.appendChild(dot);
       }
       changedNode.appendChild(burst);
+      changedNode.classList.add('changed-text-clearing');
       changedNode.classList.add('changed-text-unmarking');
+      editorRef.current.focus();
+      if (clickedRange && changedNode.contains(clickedRange.startContainer)) {
+        const selection = window.getSelection();
+        if (selection) {
+          selection.removeAllRanges();
+          selection.addRange(clickedRange);
+        }
+      }
 
       const timerId = window.setTimeout(() => {
         if (!editorRef.current) {
@@ -157,7 +209,16 @@ const Editor: React.FC<EditorProps> = ({ text, chunks, onChange, isLoading, isDa
         parent.removeChild(changedNode);
 
         editorRef.current.focus();
-        placeCaretAtTextNodeEnd(insertedTextNode);
+        const selection = window.getSelection();
+        if (selection) {
+          const range = document.createRange();
+          range.setStart(insertedTextNode, Math.max(0, Math.min(clickedOffset, insertedTextNode.length)));
+          range.collapse(true);
+          selection.removeAllRanges();
+          selection.addRange(range);
+        } else {
+          placeCaretAtTextNodeEnd(insertedTextNode);
+        }
 
         lastSyncedHtmlRef.current = editorRef.current.innerHTML;
         if (canApplyTargetedChunkUpdate) {
@@ -168,11 +229,11 @@ const Editor: React.FC<EditorProps> = ({ text, chunks, onChange, isLoading, isDa
 
         // If chunk state is already stale/cleared, still allow span -> plain text conversion.
         onChange(editorRef.current.innerText);
-      }, EDITOR_MOTION.unmarkDurationMs);
+      }, burstPreset.durationMs);
 
       unmarkTimersRef.current.push(timerId);
     },
-    [chunks, onChange]
+    [burstPreset, chunks, onChange]
   );
 
   const handlePaste = useCallback(

@@ -18,6 +18,18 @@ export interface UserProfile {
   picture: string;
 }
 
+export interface BurstPreset {
+  id: string;
+  label: string;
+  particleCount: number;
+  durationMs: number;
+  dotSizePx: number;
+  baseDistancePx: number;
+  distanceVariancePx: number;
+  spreadDeg: number;
+  pattern?: 'radial' | 'horizontal';
+}
+
 export interface EditorState {
   text: string;
   chunks: RefinementChunk[];

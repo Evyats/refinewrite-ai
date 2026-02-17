@@ -1,10 +1,32 @@
-# RefineWrite AI
+<h1>
+  <img src="./favicon.svg" alt="RefineWrite logo" width="28" style="vertical-align: middle; margin-right: 8px;" />
+  <span>RefineWrite AI</span>
+</h1>
+
+Production URL: https://refinewrite-ai.vercel.app/
 
 RefineWrite is a React + Express editing app with:
 - Google OAuth sign-in (single allowed email)
 - Deterministic local `Prettier` mode
 - Server-side OpenAI refinement for other modes via SSE streaming
 - Inline changed-word highlighting and edit-back behavior
+
+## Screenshots
+
+<table>
+  <tr>
+    <td><img src="./screenshots/1.png" alt="Screenshot 1" /></td>
+    <td><img src="./screenshots/2.png" alt="Screenshot 2" /></td>
+  </tr>
+  <tr>
+    <td><img src="./screenshots/3.png" alt="Screenshot 3" /></td>
+    <td><img src="./screenshots/4.png" alt="Screenshot 4" /></td>
+  </tr>
+  <tr>
+    <td><img src="./screenshots/5.png" alt="Screenshot 5" /></td>
+    <td><img src="./screenshots/6.png" alt="Screenshot 6" /></td>
+  </tr>
+</table>
 
 ## Tech stack
 
